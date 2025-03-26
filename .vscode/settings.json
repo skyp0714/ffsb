@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "regex.h": "c",
+        "ffsb.h": "c",
+        "inttypes.h": "c"
+    }
+}

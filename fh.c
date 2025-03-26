@@ -27,6 +27,8 @@
 #include <inttypes.h>
 #include <assert.h>
 
+#include <math.h>
+
 #include "ffsb.h"
 #include "fh.h"
 
@@ -40,6 +42,7 @@
 #ifndef HAVE_FSEEKO64
 #define lseek64 lseek
 #endif
+
 
 /* All these functions read the global mainconfig->bufferedio variable
  * to determine if they are to do buffered i/o or normal.
@@ -93,6 +96,16 @@ static int fhopenhelper(char *filename, char *bufflags, int flags,
 	return fd;
 }
 
+int fhopenreadwrite(char *filename, ffsb_thread_t *ft, ffsb_fs_t *fs)
+{
+	int flags = O_RDWR; // Open for both reading and writing
+	int directio = fs_get_directio(fs);
+
+	if (directio)
+		flags |= O_DIRECT; // Use direct I/O if specified by the filesystem
+	return fhopenhelper(filename, "rw", flags, ft, fs);
+}
+
 int fhopenread(char *filename, ffsb_thread_t *ft, ffsb_fs_t *fs)
 {
 	int flags = O_RDONLY;
@@ -136,7 +149,8 @@ int fhopencreate(char *filename, ffsb_thread_t *ft, ffsb_fs_t *fs)
 void fhread(int fd, void *buf, uint64_t size, ffsb_thread_t *ft, ffsb_fs_t *fs)
 {
 	ssize_t realsize;
-	struct timeval start, end;
+	struct timeval start, mid, end;
+	int regexec_res, buf_size; 
 	int need_stats = ft_needs_stats(ft, SYS_READ) ||
 		fs_needs_stats(fs, SYS_READ);
 
@@ -146,8 +160,8 @@ void fhread(int fd, void *buf, uint64_t size, ffsb_thread_t *ft, ffsb_fs_t *fs)
 	realsize = read(fd, buf, size);
 
 	if (need_stats) {
-		gettimeofday(&end, NULL);
-		do_stats(&start, &end, ft, fs, SYS_READ);
+		gettimeofday(&mid, NULL);
+		do_stats(&start, &mid, ft, fs, SYS_READ);
 	}
 
 	if (realsize != size) {
@@ -156,6 +170,80 @@ void fhread(int fd, void *buf, uint64_t size, ffsb_thread_t *ft, ffsb_fs_t *fs)
 		perror("read");
 		exit(1);
 	}
+	buf_size = BUFFER_SIZE > realsize ? realsize : BUFFER_SIZE;
+
+	for (int i=0; i<realsize; i=i+buf_size){
+		memcpy((void *) ft->local_buffer, (void *)((char*)buf+i), buf_size);
+		regexec_res = regexec(&(ft->rgx), ft->local_buffer, 0, NULL, 0);
+		if (regexec_res && regexec_res != REG_NOMATCH)
+		{
+			fprintf(stderr, "Regex match failed\n");
+			exit(1);
+		}
+	}
+	//compute time
+	// ffsb_micro_sleep(10);
+	if (need_stats) {
+		gettimeofday(&end, NULL);
+		do_stats(&mid, &end, ft, fs, COMPUTE_REGEX);
+	}
+}
+
+void fhreadwrite(int fd, void *buf, void *buf2, uint64_t size, ffsb_thread_t *ft, ffsb_fs_t *fs)
+{
+	ssize_t realsize;
+	struct timeval s1, e1s2, e2s3, e3;
+	int regexec_res, buf_size; 
+
+	assert(size <= SIZE_MAX);
+	gettimeofday(&s1, NULL);
+	realsize = read(fd, buf, size);
+
+	gettimeofday(&e1s2, NULL);
+	do_stats(&s1, &e1s2, ft, fs, SYS_READ);
+
+	if (realsize != size) {
+		printf("Read %lld instead of %llu bytes.\n",
+		       (unsigned long long)realsize, (unsigned long long)size);
+		perror("read");
+		exit(1);
+	}
+
+	// for (int i=0; i<realsize; i++){
+	// 	((char*)buf)[i] += 1;
+	// }
+
+	buf_size = BUFFER_SIZE > realsize ? realsize : BUFFER_SIZE;
+
+	for (int i=0; i<realsize; i=i+buf_size){
+		memcpy((void *) ft->local_buffer, (void *)((char*)buf+i), buf_size);
+		regexec_res = regexec(&(ft->rgx), ft->local_buffer, 0, NULL, 0);
+		if (regexec_res && regexec_res != REG_NOMATCH)
+		{
+			fprintf(stderr, "Regex match failed\n");
+			exit(1);
+		}
+	}
+	//compute time
+	// ffsb_micro_sleep(10);
+	gettimeofday(&e2s3, NULL);
+	do_stats(&e1s2, &e2s3, ft, fs, COMPUTE_REGEX);
+
+	// memset((void *)((char*)ft->alignedbuf2), 0, size);
+	realsize = write(fd, buf, size);
+
+	gettimeofday(&e3, NULL);
+	do_stats(&e2s3, &e3, ft, fs, SYS_WRITE);
+
+
+	if (realsize != size) {
+		printf("Wrote %zd instead of %d bytes.\n"
+			  "Probably out of disk space\n", realsize, size);
+		perror("write");
+		exit(1);
+	}
+
+	
 }
 
 void fhwrite(int fd, void *buf, uint32_t size, ffsb_thread_t *ft, ffsb_fs_t *fs)

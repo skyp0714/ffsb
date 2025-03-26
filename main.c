@@ -34,6 +34,17 @@
 #include "util.h"
 #include "parser.h"
 
+
+ffsb_config_t fc;
+tg_run_params_t *params;
+ffsb_op_results_t total_results;
+struct ffsb_time_poll pdata;
+struct timeval starttime, endtime;
+double totaltime = 0.0f, usertime = 0.0f, systime = 0.0f;
+struct rusage before_self, before_children, after_self, after_children;
+char ctime_start_buf[32];
+char ctime_end_buf[32];
+
 /* State information for the polling function below */
 struct ffsb_time_poll {
 	struct timeval starttime;
@@ -55,23 +66,88 @@ static int ffsb_poll_fn(void *ptr)
 	return 0;
 }
 
+void handle_sigint(int sig) {
+	struct timeval difftime;
+    printf("Caught SIGINT/SIGTERM. Cleaning up...\n");
+
+	for (int i = 0; i < fc.num_threadgroups; i++) {
+		struct ffsb_op_results tg_results;
+		ffsb_tg_t *tg = fc.groups + i;
+
+		tg->flagval = tg->stopval;
+		/* Wait for all of the threadgroup master threads to finish */
+		for (int j = 0; j < fc.num_threadgroups; j++)
+			pthread_join(params[j].pt, NULL);
+	}
+
+    printf("Gracefully killed all threads...\n");
+
+	ffsb_sync();
+	gettimeofday(&endtime, NULL);
+	ffsb_getrusage(&after_self, &after_children);
+
+	printf("FFSB benchmark finished   at: %s\n",
+	       ctime_r(&endtime.tv_sec, ctime_end_buf));
+	printf("Results:\n");
+	fflush(stdout);
+
+	timersub(&endtime, &pdata.starttime, &difftime);
+
+	totaltime = tvtodouble(&difftime);
+
+	printf("Benchmark took %.2lf sec\n", totaltime);
+	printf("\n");
+
+	for (int i = 0; i < fc.num_threadgroups; i++) {
+		struct ffsb_op_results tg_results;
+		ffsb_tg_t *tg = fc.groups + i;
+
+		init_ffsb_op_results(&tg_results);
+
+		/* Grab the individual tg results */
+		tg_collect_results(tg, &tg_results);
+
+		if (fc.num_threadgroups == 1)
+			printf("Total Results\n");
+		else
+			printf("ThreadGroup %d\n", i);
+
+		printf("===============\n");
+		print_results(&tg_results, totaltime);
+
+		printf("\n");
+
+		if (tg_needs_stats(tg)) {
+			ffsb_statsd_t fsd;
+			tg_collect_stats(tg, &fsd);
+			ffsb_statsd_print(&fsd);
+		}
+
+		/* Add the tg results to the total */
+		tg_collect_results(&fc.groups[i], &total_results);
+	}
+    exit(0);  // Exit the program
+}
+
 int main(int argc, char *argv[])
 {
 	int i;
-	ffsb_config_t fc;
+	struct timeval difftime;
 	ffsb_barrier_t thread_barrier, tg_barrier;
-	tg_run_params_t *params;
-	struct ffsb_time_poll pdata;
-	struct timeval starttime, endtime, difftime;
 	pthread_attr_t attr;
-	ffsb_op_results_t total_results;
-	double totaltime = 0.0f, usertime = 0.0f, systime = 0.0f;
-	struct rusage before_self, before_children, after_self, after_children;
 	pthread_t *fs_pts; /* threads to do filesystem creates in parallel */
 	char *callout = NULL;
 
-	char ctime_start_buf[32];
-	char ctime_end_buf[32];
+
+	// Set up the signal handler for SIGINT
+    if (signal(SIGINT, handle_sigint) == SIG_ERR) {
+        perror("Unable to catch SIGINT");
+        exit(1);
+    }
+	if (signal(SIGTERM, handle_sigint) == SIG_ERR) {
+        perror("Unable to catch SIGINT");
+        exit(1);
+    }
 
 	memset(&before_self, 0, sizeof(before_self));
 	memset(&before_children, 0, sizeof(before_children));

@@ -38,6 +38,7 @@ void init_ffsb_thread(ffsb_thread_t *ft, struct ffsb_tg *tg, unsigned bufsize,
 void destroy_ffsb_thread(ffsb_thread_t *ft)
 {
 	free(ft->mallocbuf);
+	free(ft->mallocbuf2);
 	destroy_random(&ft->rd);
 	if (ft->fsd.config)
 		ffsb_statsd_destroy(&ft->fsd);
@@ -57,11 +58,22 @@ void *ft_run(void *data)
 
 	ffsb_barrier_wait(tg_get_start_barrier(ft->tg));
 
+	int regcomp_res;
+	regcomp_res = regcomp(&(ft->rgx), "FFSB", REG_EXTENDED);
+	if (regcomp_res)
+	{
+		fprintf(stderr, "Could not compile regex\n");
+		exit(1);
+	}
+	tg_get_op(ft->tg, &ft->rd, &params);
 	while (tg_get_flagval(ft->tg) != stopval) {
 		tg_get_op(ft->tg, &ft->rd, &params);
 		do_op(ft, params.fs, params.opnum);
-		ffsb_milli_sleep(wait_time);
+		// do_op(ft, params.fs, 2);
+		// do_op(ft, params.fs, 15);
+		// ffsb_milli_sleep(wait_time);
 	}
+	regfree(&(ft->rgx));
 	return NULL;
 }
 
@@ -69,13 +81,22 @@ void ft_alter_bufsize(ffsb_thread_t *ft, unsigned bufsize)
 {
 	if (ft->mallocbuf != NULL)
 		free(ft->mallocbuf);
+	if (ft->mallocbuf2 != NULL)
+		free(ft->mallocbuf2);
 	ft->mallocbuf = ffsb_malloc(bufsize + 4096);
 	ft->alignedbuf = ffsb_align_4k(ft->mallocbuf + (4096 - 1));
+	ft->mallocbuf2 = ffsb_malloc(bufsize + 4096);
+	ft->alignedbuf2 = ffsb_align_4k(ft->mallocbuf2 + (4096 - 1));
 }
 
 char *ft_getbuf(ffsb_thread_t *ft)
 {
 	return ft->alignedbuf;
+}
+
+char *ft_getbuf2(ffsb_thread_t *ft)
+{
+	return ft->alignedbuf2;
 }
 
 

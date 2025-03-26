@@ -47,7 +47,8 @@ typedef enum { SYS_OPEN = 0,
 	       SYS_LSEEK,
 	       SYS_UNLINK,
 	       SYS_CLOSE,
-	       SYS_STAT
+	       SYS_STAT, 
+		   COMPUTE_REGEX,
 } syscall_t;
 
 /* ASCII versions of the syscall names */
@@ -57,7 +58,7 @@ extern char *syscall_names[];
 int ffsb_stats_str2syscall(char *, syscall_t *);
 
 /* Keep it in sync with syscall_t */
-#define FFSB_NUM_SYSCALLS (8UL)
+#define FFSB_NUM_SYSCALLS (9UL)
 
 /* Increment for values array */
 #define FFSB_VALUES_INIT_ARRAY_SIZE (100000UL)

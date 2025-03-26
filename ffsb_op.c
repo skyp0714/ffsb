@@ -39,6 +39,7 @@ ffsb_op_t ffsb_op_list[] =
  {12, "write_fsync", ffsb_writefile_fsync, WRITE, fop_bench, NULL},
  {13, "create_fsync", ffsb_createfile_fsync, WRITE, fop_bench, fop_age},
  {14, "append_fsync", ffsb_appendfile_fsync, WRITE, fop_bench, fop_age},
+ {15, "readwrite", ffsb_readwritefile, WRITE, fop_bench, NULL}
 };
 
 void init_ffsb_op_results(ffsb_op_results_t *results)

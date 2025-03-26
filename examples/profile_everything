@@ -2,7 +2,7 @@ directio	= 0
 time		= 10
 
 [filesystem]
-	location	= /mnt/test1
+	location	= /mnt/ffsb_test
 
 	num_dirs	= 100
 

@@ -77,6 +77,23 @@ static unsigned readfile_helper(int fd, uint64_t size, uint32_t blocksize,
 	return iterations;
 }
 
+static unsigned readwritefile_helper(int fd, uint64_t size, uint32_t blocksize,
+				char *buf, char *buf2, ffsb_thread_t *ft, ffsb_fs_t *fs)
+{
+	int iterations, a;
+	int last;
+
+	iterations = size / blocksize;
+	last = size % blocksize;
+
+	for (a = 0; a < iterations; a++)
+		printf("");
+		fhreadwrite(fd, buf, buf2, blocksize, ft, fs);
+	if (last)
+		fhreadwrite(fd, buf, buf2, last, ft, fs);
+	return iterations;
+}
+
 static uint64_t get_random_offset(randdata_t *rd, uint64_t filesize,
 				  int aligned)
 {
@@ -215,6 +232,55 @@ void ffsb_readall(ffsb_thread_t *ft, ffsb_fs_t *fs, unsigned opnum)
 
 	ft_incr_op(ft, opnum, iterations, filesize);
 	ft_add_readbytes(ft, filesize);
+}
+
+void ffsb_readwritefile(ffsb_thread_t *ft, ffsb_fs_t *fs, unsigned opnum)
+{
+	struct benchfiles *bf = (struct benchfiles *)fs_get_opdata(fs, 0);
+	struct ffsb_file *curfile = NULL;
+
+	int fd;
+	uint64_t filesize;
+	int stopval = tg_get_stopval(ft->tg);
+	unsigned wait_time = tg_get_waittime(ft->tg);
+	uint64_t iterations_rw = 0;
+
+	char *buf = ft_getbuf(ft);
+	char *buf2 = ft_getbuf2(ft);
+	int write_random = ft_get_write_random(ft);
+	uint32_t write_size = ft_get_write_size(ft);
+	uint32_t write_blocksize = ft_get_write_blocksize(ft);
+	int read_random = ft_get_read_random(ft);
+	uint64_t read_size = ft_get_read_size(ft);
+	uint32_t read_blocksize = ft_get_read_blocksize(ft);
+	uint32_t read_skipsize = ft_get_read_skipsize(ft);
+	int skip_reads = ft_get_read_skip(ft);
+	struct randdata *rd = ft_get_randdata(ft);
+
+	curfile = choose_file_reader(bf, rd);
+	fd = fhopenreadwrite(curfile->name, ft, fs);
+
+	filesize = ffsb_get_filesize(curfile->name);
+
+	assert(filesize >= read_size);
+	// assert(filesize >= write_size);
+	/* Sequential read, starting at a random point */
+	uint64_t range = filesize - read_size;
+	uint64_t offset = 0;
+	/* Regular sequential reads */
+	int cnt = 0;
+	while (tg_get_flagval(ft->tg) != stopval) {
+		//printf("Reading file %d for %d times\n", fd, cnt);
+		iterations_rw = readwritefile_helper(fd, filesize, read_blocksize, buf, buf2, ft, fs);
+		lseek(fd, 0, SEEK_SET) == -1;
+		// ffsb_milli_sleep(wait_time);
+		// ft_incr_op(ft, 0, 1, filesize);
+		// ft_incr_op(ft, 2, 1, filesize);
+		// ft_add_readbytes(ft, filesize);
+		// ft_add_writebytes(ft, filesize);
+	}
+	unlock_file_reader(curfile);
+	fhclose(fd, ft, fs);
 }
 
 /* Shared core between ffsb_writefile and ffsb_writefile_fsync.*/

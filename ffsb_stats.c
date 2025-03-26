@@ -13,6 +13,7 @@ char *syscall_names[] = {
 	"unlink",
 	"close",
 	"stat",
+	"regex",
 };
 
 /* yuck, just for the parser anyway.. */
@@ -200,10 +201,10 @@ void ffsb_statsd_add(ffsb_statsd_t *dest, ffsb_statsd_t *src)
 static void print_buckets_helper(ffsb_statsc_t *fsc, uint32_t *buckets)
 {
 	int i;
-	if (fsc->num_buckets == 0) {
-		printf("   -\n");
-		return;
-	}
+	// if (fsc->num_buckets == 0) {
+	// 	printf("   -\n");
+	// 	return;
+	// }
 	for (i = 0; i < fsc->num_buckets; i++) {
 		struct stat_bucket *sb = &fsc->buckets[i];
 		printf("\t\t msec_range[%d]\t%f - %f : %8u\n", 
@@ -213,36 +214,86 @@ static void print_buckets_helper(ffsb_statsc_t *fsc, uint32_t *buckets)
 	printf("\n");
 }
 
+
+typedef struct {
+    float read;
+    float regex;
+	float total;
+	float write;
+} Latency;
+
+int cmpfunc (const void * a, const void * b)
+{
+    if (*(float*)a > *(float*)b) return 1;
+    else if (*(float*)a < *(float*)b) return -1;
+    else return 0;
+}
+int compare(const void *p, const void *q) {
+    int l = ((Latency *)p)->total;
+    int r = ((Latency *)q)->total;
+    return (l - r);
+}
+
 void ffsb_statsd_print(ffsb_statsd_t *fsd)
 {
+	int n = (unsigned long)fsd->num_values[1];
+	// Latency *lat_arr = (Latency *)malloc(n * sizeof(Latency));
+	// for (int i=0;i<n;i++){
+	// 	lat_arr[i].read = fsd->values[1][i];
+	// 	lat_arr[i].regex = fsd->values[8][i];
+	// 	lat_arr[i].write = fsd->values[2][i];
+	// 	lat_arr[i].total = lat_arr[i].read + lat_arr[i].regex + lat_arr[i].write ;
+	// }
+	// qsort(lat_arr, n, sizeof(Latency), compare);
+
 	int i;
 	uint64_t overall_calls = 0;
-	printf("\nSystem Call Latency statistics in millisecs\n" "=====\n");
-	printf("\t\tMin\t\tAvg\t\tMax\t\tTotal Calls\n");
+	printf("\nSystem Call Latency statistics in microsecs\n" "=====\n");
+	printf("\t\tMin\t\tAvg\t\tMax\t\t99%\t\tTotal Calls\n");
 	printf("\t\t========\t========\t========\t============\n");
 	for (i = 0; i < FFSB_NUM_SYSCALLS; i++){
 		if (fsd->counts[i]) {
-			printf("[%7s]\t%05f\t%05lf\t%05f\t%12u\n",
-			       syscall_names[i], (float)fsd->mins[i] / 1000.0f,
-			       (fsd->totals[i] / (1000.0f *
-						  (double)fsd->counts[i])),
-			       (float)fsd->maxs[i] / 1000.0f, fsd->counts[i]);
+			qsort((float *)fsd->values[i],(unsigned long) fsd->counts[i], sizeof(float), cmpfunc);
+			printf("[%7s]\t%f\t%05lf\t%f\t%lf\t%12u\n",
+			       syscall_names[i], (float)fsd->mins[i],
+			       (fsd->totals[i] / (double)fsd->counts[i]),
+			       (float)fsd->maxs[i], 
+				   (float)fsd->values[i][(unsigned long) (0.99 * (unsigned long)fsd->num_values[i])],
+				   (unsigned long)fsd->counts[i]);
 			print_buckets_helper(fsd->config, fsd->buckets[i]);
 		}
 		overall_calls += fsd->num_values[i];
 	}
-	printf("\nDiscrete overall System Call Latency statistics in millisecs\n" "=====\n");
-	printf("\nOverall Calls: %lu\n=====\nValues[ms]:", (unsigned long)overall_calls);
-	uint64_t j;
-	//printf("\n%lu", fsd->num_values);
-	for (i = 0; i < FFSB_NUM_SYSCALLS; ++i)
-	{
-		printf("\n====\n[%7s]\tTotal calls: %12lu\n", syscall_names[i], (unsigned long)fsd->num_values[i]);
-		for (j = 0; j < fsd->num_values[i]; ++j)
-		{
-			printf("\n%05f", (float)fsd->values[i][j] / 1000.0f);
-		}
-	}
+	// printf("[%7s]\t%f\t%05lf\t%f\t%lf\t%12u\n",
+	// 		"Total", lat_arr[0].total,
+	// 		(fsd->totals[1] / (double)fsd->counts[1]) + (fsd->totals[8] / (double)fsd->counts[8]) + (fsd->totals[2] / (double)fsd->counts[2]),
+	// 		lat_arr[n-1].total, 
+	// 		lat_arr[(unsigned long) (0.99 * n)].total,
+	// 		n);
+	printf("\nAverage_latency_breakdown(read): \t%f",
+			(fsd->totals[1] / (double)fsd->counts[1]));
+	printf("\nAverage_latency_breakdown(regex): \t%f",
+			(fsd->totals[8] / (double)fsd->counts[8]));
+	printf("\nAverage_latency_breakdown(write): \t%f",
+			(fsd->totals[2] / (double)fsd->counts[2]));
+	// printf("\n99%% latency breakedown (read):  \t%f",
+	// 		lat_arr[(unsigned long) (0.99 * n)].read);
+	// printf("\n99%% latency breakedown (regex):  \t%f",
+	// 	lat_arr[(unsigned long) (0.99 * n)].regex);
+	// printf("\n99%% latency breakedown (write):  \t%f\n",
+	// 	lat_arr[(unsigned long) (0.99 * n)].write);
+
+	// printf("\nDiscrete overall System Call Latency statistics in millisecs\n" "=====\n");
+	// printf("\nOverall Calls: %lu\n=====\nValues[ms]:", (unsigned long)overall_calls);
+	// uint64_t j;
+	// for (i = 0; i < FFSB_NUM_SYSCALLS; ++i)
+	// {
+	// 	printf("\n====\n[%7s]\tTotal calls: %12lu\n", syscall_names[i], (unsigned long)fsd->num_values[i]);
+	// 	for (j = 0; j < fsd->num_values[i]; ++j)
+	// 	{
+	// 		printf("\n%05f", (float)fsd->values[i][j] / 1000.0f);
+	// 	}
+	// }
 }
 
 #if 0 /* Testing */

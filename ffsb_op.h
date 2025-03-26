@@ -67,7 +67,7 @@ extern ffsb_op_t ffsb_op_list[];
 /* This *must* be updated when a new operation is added or one is
  * removed several other structures use it for statically sized arrays
  */
-#define FFSB_NUMOPS (15)
+#define FFSB_NUMOPS (16)
 
 /* Returns index of an op.
  * Returns -1 if opname isn't found, and its case sensitive :)

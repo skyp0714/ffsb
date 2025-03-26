@@ -661,6 +661,7 @@ int get_weight_total(ffsb_tg_t *tg)
 static int verify_tg(ffsb_tg_t *tg)
 {
 	uint32_t read_weight    = tg_get_op_weight(tg, "read");
+	uint32_t readwrite_weight    = tg_get_op_weight(tg, "readwrite");
 	uint32_t readall_weight = tg_get_op_weight(tg, "readall");
 	uint32_t write_weight   = tg_get_op_weight(tg, "write");
 	uint32_t create_weight  = tg_get_op_weight(tg, "create");

@@ -20,6 +20,7 @@
 
 #include <pthread.h>
 #include <inttypes.h>
+#include <regex.h>
 
 #include "rand.h"
 #include "ffsb_op.h"
@@ -27,6 +28,8 @@
 #include "ffsb_stats.h"
 
 #include "util.h" /* for barrier stuff */
+
+
 
 struct ffsb_tg;
 struct ffsb_op_results;
@@ -37,6 +40,7 @@ struct ffsb_op_results;
  * mostly just holds per-thread state information such as the random
  * data store and the per-thread buffer to copy data to/from disk
  */
+#define BUFFER_SIZE   16384   //16384 //131072  //262144 //524288 //262144  //2097152
 
 typedef struct ffsb_thread {
 	unsigned thread_num;
@@ -50,7 +54,11 @@ typedef struct ffsb_thread {
 	 * "mallocbuf" which is what malloc gave us.
 	 */
 	char *alignedbuf;
+	char *alignedbuf2;
 	char *mallocbuf;
+	char *mallocbuf2;
+	char local_buffer[BUFFER_SIZE];
+	regex_t rgx;
 
 	struct ffsb_op_results results;
 

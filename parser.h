@@ -59,6 +59,7 @@
 	{"bindfs", NULL, TYPE_STRING, STORE_SINGLE},			\
 	{"num_threads", NULL, TYPE_U32, STORE_SINGLE},			\
 	{"read_weight", NULL, TYPE_WEIGHT, STORE_SINGLE},		\
+	{"readwrite_weight", NULL, TYPE_WEIGHT, STORE_SINGLE},		\
 	{"readall_weight", NULL, TYPE_WEIGHT, STORE_SINGLE},		\
 	{"read_random", NULL, TYPE_BOOLEAN, STORE_SINGLE},		\
 	{"read_skip", NULL, TYPE_U32, STORE_SINGLE},			\

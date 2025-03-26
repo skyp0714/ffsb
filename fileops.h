@@ -36,6 +36,7 @@ void ffsb_appendfile(ffsb_thread_t *tconfig, ffsb_fs_t *, unsigned opnum);
 void ffsb_appendfile_fsync(ffsb_thread_t *tconfig, ffsb_fs_t *, unsigned opnum);
 void ffsb_stat(ffsb_thread_t *ft, ffsb_fs_t *fs, unsigned opnum);
 void ffsb_open_close(ffsb_thread_t *ft, ffsb_fs_t *fs, unsigned opnum);
+void ffsb_readwritefile(ffsb_thread_t *tconfig, ffsb_fs_t *, unsigned opnum);
 
 struct ffsb_op_results;
 

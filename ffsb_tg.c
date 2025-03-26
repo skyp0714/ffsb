@@ -82,7 +82,8 @@ void *tg_run(void *data)
 	/* wait for termination condition to be true */
 	do {
 		ffsb_sleep(params->wait_time);
-	} while (params->poll_fn(params->poll_data) == 0);
+		// ffsb_milli_sleep(params->wait_time);
+	} while (params->poll_fn(params->poll_data) == 0 && tg->flagval != tg->stopval);
 
 	/* set flag value */
 	tg->flagval = tg->stopval;
